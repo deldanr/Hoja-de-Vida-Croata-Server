@@ -11,15 +11,10 @@ require("dotenv").config();
 app.use(cors());
 app.use(bodyParser.json());
 
-app.use((req, res, next) => {
-  console.log(`${req.method} ${req.path}`);
-  next();
-});
-
 // Proteccion de los endpoint
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutos
-  max: 25 // limita cada IP a 100 solicitudes por ventana
+  max: 200 // limita cada IP a 100 solicitudes por ventana
 });
 
 //Verificador de los datos de entrada del formulario
@@ -35,47 +30,46 @@ const formularioSchema = Joi.object({
   estadoCivil: Joi.string().required(),
   telefono: Joi.number().required(),
   correoElectronico: Joi.string().email().required(),
+  sinhijos: Joi.boolean(),
   hijos: Joi.array()
     .items(
       Joi.object({
-        nombre: Joi.string().required(),
-        sexo: Joi.string().valid("Hombre", "Mujer").required(),
-        edad: Joi.number().required(),
+        nombre: Joi.string().allow(''),
+        sexo: Joi.string().valid("Hombre", "Mujer"),
+        edad: Joi.number().allow(''),
       })
-    )
-    .required(),
+    ),
   academicos: Joi.array()
     .items(
       Joi.object({
         institucion: Joi.string().required(),
         nombreCarrera: Joi.string().required(),
         anoInicio: Joi.date().required(),
-        anoFin: Joi.date().required(),
+        anoFin: Joi.date(),
         logros: Joi.string().required(),
       })
-    )
-    .required(),
-  nombreEmpresa: Joi.string().required(),
-  lugarTrabajo: Joi.string().required(),
-  cargo: Joi.string().required(),
-  descTrabajo: Joi.string().required(),
-  logrosLaborales: Joi.string().required(),
-  aporte: Joi.string().required(),
+    ),
+  cesante: Joi.boolean(),
+  nombreEmpresa: Joi.string(),
+  lugarTrabajo: Joi.string(),
+  cargo: Joi.string(),
+  descTrabajo: Joi.string(),
+  logrosLaborales: Joi.string(),
+  aporte: Joi.string(),
   familiaresCroatas: Joi.array()
     .items(
       Joi.object({
         nombreCompleto: Joi.string().required(),
         parentesco: Joi.string().required(),
       })
-    )
-    .required(),
+    ),
     antepasadoCroata: Joi.object({
       nombre: Joi.string().required(),
       parentesco: Joi.string().required(),
       fechaNacimientoA: Joi.date().required(),
       lugarNacimientoA: Joi.string().required(),
-      nombrePadre: Joi.string().required(),
-      nombreMadre: Joi.string().required(),
+      nombrePadre: Joi.string(),
+      nombreMadre: Joi.string(),
       fechaFallecimiento: Joi.date().required(),
       lugarFallecimiento: Joi.string().required(),
       anoEmigracion: Joi.number().required(),
@@ -87,7 +81,7 @@ const formularioSchema = Joi.object({
       pareja: Joi.object({
         nombreConyuge: Joi.string().required(),
         anoCasamiento: Joi.number().required(),
-      }).required(),
+      }),
     }),
   interesCroatas: Joi.string().required(),
 });
@@ -106,8 +100,10 @@ function createPrompt(formData) {
     estadoCivil,
     telefono,
     correoElectronico,
+    sinhijos,
     hijos,
     academicos,
+    cesante,
     nombreEmpresa,
     lugarTrabajo,
     cargo,
@@ -133,7 +129,7 @@ Los datos son:
     Estado Civil: ${estadoCivil}
     Teléfono: ${telefono}
     Correo Electrónico: ${correoElectronico}`;
-  if (hijos.length > 0) {
+  if (!sinhijos) {
     const hijosInfo = hijos
       .map(
         (hijo) =>
@@ -145,10 +141,13 @@ Los datos son:
     const academicosInfo = academicos
       .map(
         (academico) =>
-          `Institución: ${academico.institucion}, Nombre Carrera: ${academico.nombreCarrera}, Fecha desde: ${academico.anoInicio}, Fecha hasta: ${academico.anoFin}, Logros: ${academico.logros}`
+          `Institución: ${academico.institucion}, Nombre Carrera: ${academico.nombreCarrera}, Fecha desde: ${academico.anoInicio},Fecha hasta: ${academico.anoFin ? academico.anoFin : 'actualmente en curso'}, Logros: ${academico.logros}`
       )
     prompt += `Datos Académicos:\n ${academicosInfo}`;
   }
+  if (cesante){
+    prompt += `Actualmente cesante`;
+  } else {
   prompt += `\nInformación Laboral:
     Nombre Empresa: ${nombreEmpresa}
     Lugar Trabajo: ${lugarTrabajo}
@@ -156,6 +155,7 @@ Los datos son:
     Funciones: ${descTrabajo}
     Logros Laborales: ${logrosLaborales}
     Aporte a Croacia: ${aporte}`;
+  }
 
   if (familiaresCroatas.length > 0) {
     const familiaresCroatasInfo = familiaresCroatas
@@ -172,7 +172,9 @@ Los datos son:
   
     prompt += `Nombre Completo: ${antepasadoCroata.nombre}\n`;
     prompt += `Parentesco: ${antepasadoCroata.parentesco}\n`;
+    if (antepasadoCroata.nombrePadre || antepasadoCroata.nombreMadre){
     prompt += `Hijo de: ${antepasadoCroata.nombrePadre} y ${antepasadoCroata.nombreMadre}\n`;
+    }
     if (antepasadoCroata.seCaso) {
       prompt += `Se casó con: ${antepasadoCroata.pareja.nombreConyuge} el año ${antepasadoCroata.pareja.anoCasamiento}\n`;
     }
@@ -189,10 +191,10 @@ Los datos son:
   prompt += `\nAhora te indicare el formato de la Hoja de Vida que debes realizar:\n
   En primer lugar el titulo será "Hoja de Vida", debe ir centrado.
   Debajo del titulo sólo el nombre completo de la persona, pero más pequeño y centrado.
-  Luego escribir un parrafo con un resumen de los antecedentes personales de la persona, aquí incorporarás los datos de los hijos pero no incluiras datos de otras secciones. Escribir máximo 200 palabras, texto justificado. No poner la palabra resumen.
+  Luego escribir un parrafo con un resumen de los antecedentes personales de la persona, aquí incorporarás los datos de los hijos (si es que hay) pero no incluiras datos de otras secciones. Escribir máximo 200 palabras, texto justificado. No poner la palabra resumen.
   Luego una sección llamada Antecedentes Personales donde pondrás esos datos en formato lista, alineado a la izquierda y en dos columnas.
   Luego una sección llamada Antecedentes Académicos. Debes darle formato como tabla.
-  Luego una sección llamada Antecedentes Laborales. Aquí escribirás un parrafo con los datos entregados. Texto justificado.
+  Luego una sección llamada Antecedentes Laborales. Aquí escribirás un parrafo con los datos entregados, sólo si los hay. Texto justificado.
   Luego una sección llamada Familiares Croatas. Debes darle formato como tabla y usar los datos entregados.
   Luego una sección llamada Antepasado Croata. Debes escribir en máximo dos parrafos y con un total de 300 palabras los datos del antepasado croata.
   Puedes ser creativo en la sección Antepasado Croata, con tal de poder alcanzar más palabras. El texto debe ir justificado.
@@ -276,6 +278,7 @@ app.post("/api/hoja_espanol", limiter, async (req, res, next) => {
   // Validar los datos
   const { error } = formularioSchema.validate(req.body);
   if (error) {
+    console.log(error.details);
     return res.status(400).json({ error: error.details[0].message });
   }
 
