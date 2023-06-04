@@ -35,7 +35,7 @@ const formularioSchema = Joi.object({
     .items(
       Joi.object({
         nombre: Joi.string().allow(''),
-        sexo: Joi.string().valid("Hombre", "Mujer"),
+        sexo: Joi.string().valid("Hombre", "Mujer").allow(''),
         edad: Joi.number().allow(''),
       })
     ),
@@ -45,17 +45,18 @@ const formularioSchema = Joi.object({
         institucion: Joi.string().required(),
         nombreCarrera: Joi.string().required(),
         anoInicio: Joi.date().required(),
-        anoFin: Joi.date(),
+        anoFin: Joi.date().allow(''),
+        enCurso: Joi.boolean(),
         logros: Joi.string().required(),
       })
     ),
   cesante: Joi.boolean(),
-  nombreEmpresa: Joi.string(),
-  lugarTrabajo: Joi.string(),
-  cargo: Joi.string(),
-  descTrabajo: Joi.string(),
-  logrosLaborales: Joi.string(),
-  aporte: Joi.string(),
+  nombreEmpresa: Joi.string().allow(''),
+  lugarTrabajo: Joi.string().allow(''),
+  cargo: Joi.string().allow(''),
+  descTrabajo: Joi.string().allow(''),
+  logrosLaborales: Joi.string().allow(''),
+  aporte: Joi.string().allow(''),
   familiaresCroatas: Joi.array()
     .items(
       Joi.object({
@@ -68,8 +69,8 @@ const formularioSchema = Joi.object({
       parentesco: Joi.string().required(),
       fechaNacimientoA: Joi.date().required(),
       lugarNacimientoA: Joi.string().required(),
-      nombrePadre: Joi.string(),
-      nombreMadre: Joi.string(),
+      nombrePadre: Joi.string().allow(''),
+      nombreMadre: Joi.string().allow(''),
       fechaFallecimiento: Joi.date().required(),
       lugarFallecimiento: Joi.string().required(),
       anoEmigracion: Joi.number().required(),
@@ -78,10 +79,8 @@ const formularioSchema = Joi.object({
       motivoEmigracion: Joi.string().required(),
       ocupacionDestino: Joi.string().required(),
       seCaso: Joi.boolean(),
-      pareja: Joi.object({
-        nombreConyuge: Joi.string().required(),
-        anoCasamiento: Joi.number().required(),
-      }),
+      nombreConyuge: Joi.string().allow(''),
+      anoCasamiento: Joi.number().allow(''),
     }),
   interesCroatas: Joi.string().required(),
 });
@@ -176,11 +175,11 @@ Los datos son:
     prompt += `Hijo de: ${antepasadoCroata.nombrePadre} y ${antepasadoCroata.nombreMadre}\n`;
     }
     if (antepasadoCroata.seCaso) {
-      prompt += `Se casó con: ${antepasadoCroata.pareja.nombreConyuge} el año ${antepasadoCroata.pareja.anoCasamiento}\n`;
+      prompt += `Se casó con: ${antepasadoCroata.nombreConyuge} el año ${antepasadoCroata.anoCasamiento}\n`;
     }
     prompt += `Año de emigración: ${antepasadoCroata.anoEmigracion}\n`;
-    prompt += `Lugar de nacimiento: ${antepasadoCroata.lugarNacimiento}\n`;
-    prompt += `Fecha de nacimiento: ${antepasadoCroata.fechaNacimiento}\n`;
+    prompt += `Lugar de nacimiento: ${antepasadoCroata.lugarNacimientoA}\n`;
+    prompt += `Fecha de nacimiento: ${antepasadoCroata.fechaNacimientoA}\n`;
     prompt += `Motivo emigración: ${antepasadoCroata.motivoEmigracion}\n`;
     prompt += `En ${antepasadoCroata.paisEmigro} se dedicó a: ${antepasadoCroata.ocupacionDestino}\n`;
     prompt += `Fecha de defunción: ${antepasadoCroata.fechaFallecimiento} en ${antepasadoCroata.lugarFallecimiento}\n`;
@@ -262,7 +261,7 @@ async function callOpenAI2(prompt) {
         },
       ],
       temperature: 0.4, // Esta vez bajamos la creatividad al traducir.
-      max_tokens: 2000,
+      max_tokens: 2500,
     });
 
     return response;
