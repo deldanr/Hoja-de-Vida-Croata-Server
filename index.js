@@ -14,7 +14,7 @@ app.use(bodyParser.json());
 // Proteccion de los endpoint
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutos
-  max: 200 // limita cada IP a 100 solicitudes por ventana
+  max: 30 // limita cada IP a 100 solicitudes por ventana
 });
 
 //Verificador de los datos de entrada del formulario
@@ -294,6 +294,13 @@ app.post("/api/hoja_espanol", limiter, async (req, res, next) => {
         generatedText: generatedText
       };
 
+      // Guardar en un archivo JSON
+      fs.appendFile('data.json', JSON.stringify(data) + '\n', 'utf8', (err) => {
+        if (err) {
+          console.error('Error al guardar los datos:', err);
+        }
+      });
+      
       res.json({ result: generatedText });
     } else {
       res.json({ error: "La API de OpenAI devolvió una respuesta vacía" });
