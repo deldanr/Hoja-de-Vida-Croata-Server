@@ -6,6 +6,7 @@ const fs = require('fs');
 const { Configuration, OpenAIApi } = require("openai");
 const rateLimit = require("express-rate-limit");
 const app = express();
+const nodemailer = require('nodemailer');
 
 require("dotenv").config();
 app.use(cors());
@@ -14,7 +15,7 @@ app.use(bodyParser.json());
 // Proteccion de los endpoint
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutos
-  max: 30 // limita cada IP a 100 solicitudes por ventana
+  max: 500 // limita cada IP a 100 solicitudes por ventana
 });
 
 //Verificador de los datos de entrada del formulario
@@ -115,9 +116,9 @@ function createPrompt(formData) {
   } = formData;
 
   let prompt = `
-Actua como un experto en trámites de ciudadania que además es experto en html.
-Debes crear una Hoja de Vida para la solicitud de ciudadania Croata de una persona.
-Los datos son:
+Actua como un experto en trámites de ciudadania.
+Debes consolidar información que será utilizada para crear una hoja de vida.
+Los datos que vas a utilizar son los siguientes:
     Nombre Completo: ${nombreCompleto}
     Fecha de Nacimiento: ${fechaNacimiento}
     Lugar de Nacimiento: ${lugarNacimiento}
@@ -187,25 +188,16 @@ Los datos son:
   }
   prompt += `\nInterés en Obtener Ciudadania Croata: \n${interesCroatas}\n`;
 
-  prompt += `\nAhora te indicare el formato de la Hoja de Vida que debes realizar:\n
-  En primer lugar el titulo será "Hoja de Vida", debe ir centrado.
-  Debajo del titulo sólo el nombre completo de la persona, pero más pequeño y centrado.
-  Luego escribir un parrafo con un resumen de los antecedentes personales de la persona, aquí incorporarás los datos de los hijos (si es que hay) pero no incluiras datos de otras secciones. Escribir máximo 200 palabras, texto justificado. No poner la palabra resumen.
-  Luego una sección llamada Antecedentes Personales donde pondrás esos datos en formato lista, alineado a la izquierda y en dos columnas.
-  Luego una sección llamada Antecedentes Académicos. Debes darle formato como tabla.
-  Luego una sección llamada Antecedentes Laborales. Aquí escribirás un parrafo con los datos entregados, sólo si los hay. Texto justificado.
-  Luego una sección llamada Familiares Croatas. Debes darle formato como tabla y usar los datos entregados.
-  Luego una sección llamada Antepasado Croata. Debes escribir en máximo dos parrafos y con un total de 300 palabras los datos del antepasado croata.
-  Puedes ser creativo en la sección Antepasado Croata, con tal de poder alcanzar más palabras. El texto debe ir justificado.
-  Finalmente, una sección llamada Motivación por la Ciudadania Croata: Esta sección debe ser uno a dos parrafos y en esta sección puedes ser creativo para ampliar el contenido del texto.
-  
-  Consideraciones generales que debes considerar:
-  1. Todos los titulos deben ir en negrita.
-  2. Todo el texto debe ir justificado.
-  3. El contenido debe ser formateado en código HTML.
-  4. Las tablas deben ser estilizadas con uso de CSS.
-  5. Todos los parrafos deben ser en primera persona.
-  6. Todos los datos entregados deben ser utilizados, no debes omitir nada ni tampoco repetir ideas.`;
+  prompt += `\nLa información que debes redactar es la siguiente:\n
+  1. Debes crear un resumen de los antecedentes personales de la persona. Aqui incorporarás los datos de los hijos (si es que hay). No incluiras nada de otras secciones. Máximo 200 palabras, no usar la palabra resumen.
+  2. Debes escribir un parrafo donde pondrás los datos de los antecedentes laborales, sólo si los hay.
+  3. Debes escribir un parrafo escribir máximo dos parrafos y con un total de 300 palabras los antecedentes del antepasado croata. Escribir como una historia, en primera persona.
+  4. Debes escribir de uno a dos parrafos comentando la motivación para obtener la ciudadania croata.
+
+  Consideración: Los parrafos deben ser escritos en primera persona.
+
+  Formato de la entrega:
+  Debes entregar todo en un formato tipo json con los siguientes elementos: "Presentacion, Laboral, Antepasado, Motivacion".`;
 
   return [prompt,Number(creatividad)];
 }
@@ -284,14 +276,16 @@ app.post("/api/hoja_espanol", limiter, async (req, res, next) => {
   try {
     const prompt = createPrompt(req.body);
     const result = await callOpenAI(prompt);
-
+   
     if (result.data.choices.length > 0) {
       const generatedText = result.data.choices[0].message.content;
-
+      
+      const final = JSON.parse(generatedText);
+      
       const data = {
         timestamp: new Date(),
         prompt: prompt[0],
-        generatedText: generatedText
+        Presentacion: generatedText,
       };
 
       // Guardar en un archivo JSON
@@ -301,7 +295,7 @@ app.post("/api/hoja_espanol", limiter, async (req, res, next) => {
         }
       });
       
-      res.json({ result: generatedText });
+      res.json(final);
     } else {
       res.json({ error: "La API de OpenAI devolvió una respuesta vacía" });
     }
@@ -314,7 +308,7 @@ app.post("/api/hoja_espanol", limiter, async (req, res, next) => {
 
 app.post("/api/traducir", limiter, async (req, res, next) => {
   // Validar los datos
-
+  console.log(req.body);
   try {
     const prompt = req.body.resultado;
 
@@ -358,6 +352,39 @@ app.post("/api/traducir", limiter, async (req, res, next) => {
     }
   });
 });*/
+
+const transporter = nodemailer.createTransport({
+  service: 'Gmail',
+  auth: {
+    user: 'pagrodoconce@gmail.com',
+    pass: process.env.MAILEE_PASS,
+  },
+});
+
+app.post('/api/enviar-correo', (req, res) => {
+  const { nombre, correo, mensaje } = req.body;
+
+  const mailOptions = {
+    from: 'pagrodoconce@gmail.com',
+    to: 'pagrodoconce@gmail.com',
+    subject: '[Croat-IA] Contacto Web',
+    text: `
+      Nombre: ${nombre}
+      Correo: ${correo}
+      Mensaje: ${mensaje}
+    `,
+  };
+
+transporter.sendMail(mailOptions, (error, info) => {
+    if (error) {
+      console.error('Error al enviar el correo electrónico:', error);
+      res.status(500).json({ error: 'Error al enviar el correo electrónico' });
+    } else {
+      console.log('Correo electrónico enviado:', info.response);
+      res.json({ message: 'Correo electrónico enviado exitosamente' });
+    }
+  });
+});
 
 app.use((err, req, res, next) => {
   console.error(err.stack);

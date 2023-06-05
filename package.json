@@ -19,6 +19,7 @@
     "express-rate-limit": "^6.7.0",
     "joi": "^17.9.2",
     "node-fetch": "^3.2.6",
+    "nodemailer": "^6.9.3",
     "openai": "^3.2.1"
   }
 }
